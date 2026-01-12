@@ -125,6 +125,82 @@ function format(d){
     if(d<100) return d.toFixed(1);
     return d.toFixed(0);
 }
+// 添加字节格式化函数
+function formatBytes(bytes) {
+    if(bytes == 0) return '0 B/s';
+    var k = 1024;
+    var sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    var formatted = parseFloat((bytes / Math.pow(k, i)).toFixed(1)); // 保留一位小数
+    // 确保不会太长
+    if (formatted >= 100) {
+        formatted = parseFloat((bytes / Math.pow(k, i)).toFixed(0)); // 大于100时不要小数
+    }
+    return formatted + ' ' + sizes[i];
+}
+
+// 速度评估和建议函数
+function getSpeedAdvice(bytesPerSecond, type) {
+    var mbps = bytesPerSecond / 125000; // 转换为Mbps
+    var advice = { level: '', usage: '' };
+
+    if (type === 'download') {
+        if (mbps < 1) {
+            advice.level = '非常慢';
+            advice.usage = '基本文字浏览';
+        } else if (mbps < 5) {
+            advice.level = '较慢';
+            advice.usage = '网页浏览、邮件';
+        } else if (mbps < 20) {
+            advice.level = '一般';
+            advice.usage = '标清视频、在线音乐';
+        } else if (mbps < 50) {
+            advice.level = '良好';
+            advice.usage = '高清视频、中小文件下载';
+        } else if (mbps < 100) {
+            advice.level = '快速';
+            advice.usage = '4K视频、大型文件下载';
+        } else {
+            advice.level = '极速';
+            advice.usage = '8K视频、专业级应用';
+        }
+    } else if (type === 'upload') {
+        if (mbps < 1) {
+            advice.level = '非常慢';
+            advice.usage = '基本文件上传';
+        } else if (mbps < 5) {
+            advice.level = '较慢';
+            advice.usage = '照片、文档上传';
+        } else if (mbps < 20) {
+            advice.level = '一般';
+            advice.usage = '标清视频上传';
+        } else if (mbps < 50) {
+            advice.level = '良好';
+            advice.usage = '高清视频上传、云备份';
+        } else if (mbps < 100) {
+            advice.level = '快速';
+            advice.usage = '4K视频上传、专业创作';
+        } else {
+            advice.level = '极速';
+            advice.usage = '8K视频上传、企业级应用';
+        }
+    }
+
+    return advice;
+}
+
+// 获取速度等级颜色
+function getSpeedColor(level) {
+    switch(level) {
+        case '非常慢': return '#FF0000';
+        case '较慢': return '#FF6600';
+        case '一般': return '#FFCC00';
+        case '良好': return '#66CC00';
+        case '快速': return '#0099FF';
+        case '极速': return '#6600CC';
+        default: return '#000000';
+    }
+}
 
 //UI CODE
 var uiData=null;
@@ -178,6 +254,40 @@ function updateUI(forced){
 	drawMeter(I("ulMeter"),mbpsToAmount(Number(uiData.ulStatus*(status==3?oscillate():1))),meterBk,ulColor,Number(uiData.ulProgress),progColor);
 	I("pingText").textContent=format(uiData.pingStatus);
 	I("jitText").textContent=format(uiData.jitterStatus);
+
+	// 更新表格中的下载速度
+    if(uiData.dlStatus != null && uiData.dlStatus > 0) {
+        var dlSpeedBytes = uiData.dlStatus * 125000; // 1 Mbps = 125,000 B/s
+        var dlBytesText = formatBytes(dlSpeedBytes);
+        I("downloadSpeedCell").textContent = dlBytesText;
+
+        // 获取下载建议并更新表格
+        var dlAdvice = getSpeedAdvice(dlSpeedBytes, 'download');
+        I("downloadAdviceCell").innerHTML = '<span style="color:' + getSpeedColor(dlAdvice.level) + '; font-weight:bold;">' + dlAdvice.level + '</span>';
+        I("downloadUsageCell").textContent = dlAdvice.usage;
+    } else {
+        // 下载速度未出来时，显示占位符
+        I("downloadSpeedCell").textContent = '--';
+        I("downloadAdviceCell").textContent = '--';
+        I("downloadUsageCell").textContent = '--';
+    }
+
+    // 更新表格中的上传速度
+    if(uiData.ulStatus != null && uiData.ulStatus > 0) {
+        var ulSpeedBytes = uiData.ulStatus * 125000; // 1 Mbps = 125,000 B/s
+        var ulBytesText = formatBytes(ulSpeedBytes);
+        I("uploadSpeedCell").textContent = ulBytesText;
+
+        // 获取上传建议并更新表格
+        var ulAdvice = getSpeedAdvice(ulSpeedBytes, 'upload');
+        I("uploadAdviceCell").innerHTML = '<span style="color:' + getSpeedColor(ulAdvice.level) + '; font-weight:bold;">' + ulAdvice.level + '</span>';
+        I("uploadUsageCell").textContent = ulAdvice.usage;
+    } else {
+        // 上传速度未出来时，显示占位符
+        I("uploadSpeedCell").textContent = '--';
+        I("uploadAdviceCell").textContent = '--';
+        I("uploadUsageCell").textContent = '--';
+    }
 }
 function oscillate(){
 	return 1+0.02*Math.sin(Date.now()/100);
@@ -286,6 +396,7 @@ function initUI(){
 		box-sizing:border-box;
 		text-align:center;
 	}
+
 	div.testArea div.testName{
 		position:absolute;
 		top:0.1em; left:0;
@@ -420,16 +531,94 @@ function initUI(){
 			filter: invert(1);
 		}
 	}
+
+    /*新增底部文字：本测速服务器位于奇瑞信息公司内部*/
+	#footer {
+    margin-top: 2em;
+    padding: 1em;
+    color: #808080;
+    font-size: 0.9em;
+    border-top: 1px solid #e0e0e0;
+	}
+	@media all and (prefers-color-scheme: dark) {
+    #footer {
+        color: #A0A0A0;
+        border-top: 1px solid #404040;
+    	}
+	}
+
+	#repairInfo {
+		margin: 0.5em 0;
+		padding: 0.5em;
+		background-color: #f0f0f0;
+		border-radius: 4px;
+		color: #333;
+		font-size: 0.9em;
+		border: 1px solid #ddd;
+	}
+	#repairInfo strong {
+		color: #e74c3c;
+		font-size: 1.1em;
+	}
+	@media all and (prefers-color-scheme: dark) {
+		#repairInfo {
+			background-color: #303030;
+			border: 1px solid #404040;
+			color: #e0e0e0;
+		}
+	}
+
+	/* 表格样式 */
+	#speedAdviceTable {
+		font-size: 0.9em;
+		box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+		border-radius: 4px;
+		overflow: hidden;
+		margin-bottom: 2em; /* 添加底部间距 */
+	}
+	#speedAdviceTable th {
+		background-color: #6060AA;
+		color: white;
+		font-weight: bold;
+	}
+	#speedAdviceTable td, #speedAdviceTable th {
+		border: 1px solid #ddd;
+		padding: 8px;
+	}
+	@media all and (max-width: 40em) {
+		#speedAdviceTable {
+			font-size: 0.8em;
+		}
+	}
+	@media all and (prefers-color-scheme: dark) {
+		#speedAdviceTable {
+			box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+		}
+		#speedAdviceTable th {
+			background-color: #404080;
+		}
+		#speedAdviceTable td, #speedAdviceTable th {
+			border-color: #404040;
+		}
+	}
+
 </style>
-<title>奇瑞中国</title>
+<title>奇瑞内网测速平台</title>
 </head>
 <body onload="initServers()">
-<h1>奇瑞中国</h1>
+<h1>奇瑞内网测速平台</h1>
 <div id="loading" class="visible">
 	<p id="message"><span class="loadCircle"></span>Selecting a server...</p>
 </div>
+
 <div id="testWrapper" class="hidden">
 	<div id="startStopBtn" onclick="startStop()"></div><br/>
+
+	<!-- 添加报修电话到显眼位置 -->
+    <div id="repairInfo">
+        内部报修电话：<strong>592-6666</strong>
+    </div>
+
 	<a class="privacy" href="#" onclick="I('privacyPolicy').style.display=''">Privacy</a>
 	<div id="serverArea">
 		Server: <select id="server" onchange="s.setSelectedServer(SPEEDTEST_SERVERS[this.value])"></select>
@@ -437,29 +626,32 @@ function initUI(){
 	<div id="test">
 		<div class="testGroup">
             <div class="testArea2">
-				<div class="testName">Ping</div>
+				<div class="testName">Ping时延</div>
 				<div id="pingText" class="meterText" style="color:#AA6060"></div>
 				<div class="unit">ms</div>
 			</div>
 			<div class="testArea2">
-				<div class="testName">Jitter</div>
+				<div class="testName">抖动</div>
 				<div id="jitText" class="meterText" style="color:#AA6060"></div>
 				<div class="unit">ms</div>
 			</div>
 		</div>
 		<div class="testGroup">
 			<div class="testArea">
-				<div class="testName">Download</div>
+				<div class="testName">下载</div>
 				<canvas id="dlMeter" class="meter"></canvas>
 				<div id="dlText" class="meterText"></div>
 				<div class="unit">Mbit/s</div>
 			</div>
 			<div class="testArea">
-				<div class="testName">Upload</div>
+				<div class="testName">上传</div>
 				<canvas id="ulMeter" class="meter"></canvas>
 				<div id="ulText" class="meterText"></div>
 				<div class="unit">Mbit/s</div>
 			</div>
+
+
+
 		</div>
 		<div id="ipArea">
 			<span id="ip"></span>
@@ -470,9 +662,49 @@ function initUI(){
 			<input type="text" value="" id="resultsURL" readonly="readonly" onclick="this.select();this.focus();this.select();document.execCommand('copy');alert('Link copied')"/>
 			<img src="" id="resultsImg" />
 		</div>
+
+						<!-- 修改表格：移除display: none，添加初始占位符 -->
+		<div class="testGroup">
+			<div style="margin-top: 2em; width: 90%; max-width: 600px; margin-left: auto; margin-right: auto;">
+				<table id="speedAdviceTable" style="width: 100%; border-collapse: collapse;">
+					<thead>
+						<tr>
+							<th style="width: 25%;"></th>
+							<th style="width: 37.5%; text-align: center; padding: 10px; background-color: #f0f0f0; border: 1px solid #ddd;">下载</th>
+							<th style="width: 37.5%; text-align: center; padding: 10px; background-color: #f0f0f0; border: 1px solid #ddd;">上传</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td style="text-align: right; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; font-weight: bold;">实际速度</td>
+							<td id="downloadSpeedCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+							<td id="uploadSpeedCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+						</tr>
+						<tr>
+							<td style="text-align: right; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; font-weight: bold;">网络状况</td>
+							<td id="downloadAdviceCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+							<td id="uploadAdviceCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+						</tr>
+						<tr>
+							<td style="text-align: right; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; font-weight: bold;">适用场景</td>
+							<td id="downloadUsageCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+							<td id="uploadUsageCell" style="text-align: center; padding: 10px; border: 1px solid #ddd;">--</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
 	</div>
-	<a href="https://github.com/librespeed/speedtest">Source code</a>
+	<a href="https://github.com/hutuo1213/speedtest">Source code</a>
 </div>
+
+
+<!--新增底部文字：本测速服务器位于奇瑞信息公司内部保修电话：592-6666-->
+
+<div id="footer">
+    <p>本测速服务器位于奇瑞信息公司</p>
+</div>
+
 <div id="privacyPolicy" style="display:none">
     <h2>Privacy Policy</h2>
     <p>This HTML5 speed test server is configured with telemetry enabled.</p>
